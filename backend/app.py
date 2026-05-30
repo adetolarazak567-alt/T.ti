@@ -1,4 +1,4 @@
-Like from flask import Flask, request, send_file, render_template_string, jsonify
+from flask import Flask, request, send_file, render_template_string, jsonify
 from flask_cors import CORS  # 👈 Add this
 import requests
 import io
