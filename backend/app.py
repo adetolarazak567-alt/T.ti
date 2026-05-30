@@ -1,13 +1,12 @@
-from flask import Flask, request, send_file, render_template_string
-from flask_cors import CORS
+from flask import Flask, request, send_file, render_template_string, jsonify
+from flask_cors import CORS  # 👈 Add this
 import requests
 import io
-import random
-import os
 
 app = Flask(__name__)
-CORS(app)  # ✅ Required for cross‑origin calls
+CORS(app) 
 
+# The HTML interface. When you go to your Render URL, this is what you see.
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -30,7 +29,8 @@ HTML_PAGE = """
     <div class="card">
         <h2>🖼️ AI Image Generator</h2>
         <p style="color:#64748b;">Powered by Pollinations.ai &bull; <span style="background:#e2e8f0;padding:0.25rem 0.75rem;border-radius:999px;font-size:0.75rem;font-weight:600;">Free</span></p>
-        <textarea id="prompt" rows="3">Astronaut riding a horse, realistic, 4k</textarea>
+
+        <textarea id="prompt" rows="3" placeholder="Describe your image...">Astronaut riding a horse, realistic, 4k</textarea>
         <button id="generateBtn">🔄 Generate Image</button>
         <div id="status">Ready</div>
         <div id="result">
@@ -39,23 +39,33 @@ HTML_PAGE = """
             <a id="downloadBtn" class="download-btn">⬇️ Download Image</a>
         </div>
     </div>
+
     <script>
         document.getElementById('generateBtn').addEventListener('click', async function() {
             const prompt = document.getElementById('prompt').value.trim();
-            if (!prompt) { document.getElementById('status').textContent = '⚠️ Please enter a prompt.'; return; }
+            if (!prompt) {
+                document.getElementById('status').textContent = '⚠️ Please enter a prompt.';
+                return;
+            }
+
             document.getElementById('generateBtn').disabled = true;
             document.getElementById('status').textContent = '⏳ Generating...';
             document.getElementById('generatedImage').style.display = 'none';
             document.getElementById('downloadBtn').classList.remove('visible');
+
             try {
+                // Calls the same Render backend
                 const resp = await fetch('/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ prompt })
                 });
+
                 if (!resp.ok) throw new Error('Server error');
+                
                 const blob = await resp.blob();
                 const url = URL.createObjectURL(blob);
+                
                 document.getElementById('generatedImage').src = url;
                 document.getElementById('generatedImage').style.display = 'block';
                 document.getElementById('downloadBtn').href = url;
@@ -82,23 +92,21 @@ def generate():
     data = request.json
     prompt = data.get('prompt', 'a beautiful landscape')
     
-    # ✅ Ensure unique images for same prompt
-    seed = random.randint(1, 999999)
-    url = f"https://image.pollinations.ai/prompt/{prompt}?seed={seed}"
+    # Pollinations.ai – free, no token, no rate limits
+    url = f"https://image.pollinations.ai/prompt/{prompt}"
+    response = requests.get(url, timeout=90)
     
-    try:
-        response = requests.get(url, timeout=90)
-        if response.status_code != 200:
-            return {"error": "Pollinations.ai error"}, 500
-        return send_file(
-            io.BytesIO(response.content),
-            mimetype='image/png',
-            as_attachment=True,
-            download_name='image.png'
-        )
-    except Exception as e:
-        return {"error": str(e)}, 500
+    if response.status_code != 200:
+        return {"error": "Pollinations.ai error"}, 500
+    
+    return send_file(
+        io.BytesIO(response.content),
+        mimetype='image/png',
+        as_attachment=True,
+        download_name='image.png'
+    )
 
 if __name__ == '__main__':
+    import os
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
